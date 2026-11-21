@@ -1,0 +1,256 @@
+
+@startuml
+title LOG121 - Laboratoire 5 - MVC et 6 patrons
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam packageStyle rectangle
+left to right direction
+
+' ===================================
+' MODELE - OBSERVER ET MEMENTO
+' ===================================
+
+package "MODELE" {
+
+  class Image {
+    - largeur : int
+    - hauteur : int
+    - donnees : byte[]
+    + getLargeur() : int
+    + getHauteur() : int
+  }
+
+  interface Subject {
+    + attach(o : Observer) : void
+    + detach(o : Observer) : void
+    + notifyObservers() : void
+  }
+
+  interface Observer {
+    + update() : void
+  }
+
+  class Perspective <<ConcreteSubject, Originator>> {
+    - image : Image
+    - zoom : double
+    - translationX : int
+    - translationY : int
+    - observers : List<Observer>
+    + modifierZoom(f : double) : void
+    + modifierTranslation(dx : int, dy : int) : void
+    + attach(o : Observer) : void
+    + detach(o : Observer) : void
+    + notifyObservers() : void
+    + createMemento() : PerspectiveMemento
+    + restore(m : PerspectiveMemento) : void
+  }
+
+  class PerspectiveMemento <<Memento>> {
+    - zoom : double
+    - translationX : int
+    - translationY : int
+  }
+
+  Subject <|.. Perspective
+  Perspective "1" --> "0..*" Observer : notifie
+  Image "1" <-- "0..*" Perspective : utilise
+  Perspective ..> PerspectiveMemento : cree / restaure
+}
+
+' ===================================
+' VUE - MVC
+' ===================================
+
+package "VUE" {
+
+  class FenetrePrincipale {
+    + afficher() : void
+  }
+
+  class VuePerspective <<ConcreteObserver>> {
+    - perspective : Perspective
+    + update() : void
+    + afficher() : void
+  }
+
+  class VueMiniature {
+    + afficher() : void
+  }
+
+  Observer <|.. VuePerspective
+
+  VuePerspective "0..*" --> "1" Perspective : observe
+
+  FenetrePrincipale "1" *-- "2" VuePerspective
+  FenetrePrincipale "1" *-- "1" VueMiniature
+
+  VueMiniature --> Image : affiche
+}
+
+' ===================================
+' COMMAND ET SINGLETON
+' ===================================
+
+package "COMMANDES" {
+
+  interface Command {
+    + execute() : void
+    + undo() : void
+    + redo() : void
+  }
+
+  class CommandeZoom <<ConcreteCommand>> {
+    - receiver : Perspective
+    - facteur : double
+    - etatAvant : PerspectiveMemento
+    + execute() : void
+    + undo() : void
+    + redo() : void
+  }
+
+  class CommandeTranslation <<ConcreteCommand>> {
+    - receiver : Perspective
+    - dx : int
+    - dy : int
+    - etatAvant : PerspectiveMemento
+    + execute() : void
+    + undo() : void
+    + redo() : void
+  }
+
+  class GestionnaireCommandes <<Singleton, Invoker>> {
+    {static} - instance : GestionnaireCommandes
+    - historiques : Map<Perspective, Stack<Command>>
+    - commandesRefaites : Map<Perspective, Stack<Command>>
+    - GestionnaireCommandes()
+    {static} + getInstance() : GestionnaireCommandes
+    + executer(c : Command) : void
+    + annuler(p : Perspective) : void
+    + refaire(p : Perspective) : void
+  }
+
+  Command <|.. CommandeZoom
+  Command <|.. CommandeTranslation
+
+  CommandeZoom "0..*" --> "1" Perspective : receiver
+  CommandeTranslation "0..*" --> "1" Perspective : receiver
+
+  CommandeZoom --> PerspectiveMemento : etat avant
+  CommandeTranslation --> PerspectiveMemento : etat avant
+
+  GestionnaireCommandes "1" --> "0..*" Command : historiques
+}
+
+' ===================================
+' STRATEGY - COPIE DES PARAMETRES
+' ===================================
+
+package "STRATEGY" {
+
+  interface StrategieCopie <<Strategy>> {
+    + copier(source : Perspective) : PerspectiveMemento
+  }
+
+  class CopierZoom <<ConcreteStrategy>> {
+    + copier(source : Perspective) : PerspectiveMemento
+  }
+
+  class CopierTranslation <<ConcreteStrategy>> {
+    + copier(source : Perspective) : PerspectiveMemento
+  }
+
+  class CopierTout <<ConcreteStrategy>> {
+    + copier(source : Perspective) : PerspectiveMemento
+  }
+
+  StrategieCopie <|.. CopierZoom
+  StrategieCopie <|.. CopierTranslation
+  StrategieCopie <|.. CopierTout
+
+  StrategieCopie ..> Perspective
+  StrategieCopie ..> PerspectiveMemento
+}
+
+' ===================================
+' MEDIATOR - COPIER / COLLER
+' ===================================
+
+package "MEDIATOR" {
+
+  interface Mediateur {
+    + copier(source : Perspective) : void
+    + coller(destination : Perspective) : void
+    + choisirStrategie(s : StrategieCopie) : void
+  }
+
+  class MediateurPerspectives <<ConcreteMediator>> {
+    - strategie : StrategieCopie
+    - copie : PerspectiveMemento
+    + copier(source : Perspective) : void
+    + coller(destination : Perspective) : void
+    + choisirStrategie(s : StrategieCopie) : void
+  }
+
+  Mediateur <|.. MediateurPerspectives
+
+  MediateurPerspectives --> StrategieCopie : utilise
+  MediateurPerspectives --> PerspectiveMemento : conserve copie
+  MediateurPerspectives ..> Perspective : coordonne
+}
+
+' ===================================
+' CONTROLEUR - MVC
+' ===================================
+
+package "CONTROLEUR" {
+
+  class ControleurImage <<Client>> {
+    + zoomer(p : Perspective, f : double) : void
+    + translater(p : Perspective, dx : int, dy : int) : void
+    + annuler(p : Perspective) : void
+    + refaire(p : Perspective) : void
+    + copier(p : Perspective) : void
+    + coller(p : Perspective) : void
+    + sauvegarder() : void
+    + charger() : void
+  }
+}
+
+' ===================================
+' SERIALISATION
+' ===================================
+
+package "PERSISTANCE" {
+
+  class EtatApplication <<Serializable>> {
+    - image : Image
+    - perspectives : List<PerspectiveMemento>
+  }
+
+  class ServiceSauvegarde {
+    + sauvegarder(e : EtatApplication) : void
+    + charger() : EtatApplication
+  }
+
+  EtatApplication --> Image
+  EtatApplication --> PerspectiveMemento
+  ServiceSauvegarde ..> EtatApplication
+}
+
+' ===================================
+' RELATIONS ENTRE LES COMPOSANTS
+' ===================================
+
+VuePerspective ..> ControleurImage : gestes souris
+FenetrePrincipale ..> ControleurImage : actions menu
+
+ControleurImage ..> CommandeZoom : cree
+ControleurImage ..> CommandeTranslation : cree
+
+ControleurImage --> GestionnaireCommandes : utilise
+ControleurImage --> Mediateur : utilise
+ControleurImage --> ServiceSauvegarde : utilise
+ControleurImage ..> EtatApplication : prepare / restaure
+
+@enduml
